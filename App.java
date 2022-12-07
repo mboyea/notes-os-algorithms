@@ -1,122 +1,99 @@
-import java.util.Scanner;
+import java.util.ArrayList;
 
 public class App {
-	public static class ClaimGraph {
-		public int processCount, resourceCount;
-		public int[] resources;
-		public int[][] currentAllocation, maxRequests;
-
-		ClaimGraph(int processCount, int[] resources, int[][] currentAllocation, int[][] maxRequests) {
-			this.processCount = processCount;
-			this.resourceCount = resources.length;
-			this.resources = resources;
-			this.currentAllocation = currentAllocation;
-			this.maxRequests = maxRequests;
-		}
-
-		public void initialize(int processCount, int[] resources, int[][] currentAllocation, int[][] maxRequests) {
-			this.processCount = processCount;
-			this.resourceCount = resources.length;
-			this.resources = resources;
-			this.currentAllocation = currentAllocation;
-			this.maxRequests = maxRequests;
-		}
-
-		public boolean request(int p, int r, int amount) {
-			if (resources[r] < amount) return false;
-			if (maxRequests[p][r] - currentAllocation[p][r] < amount) return false;
-			resources[r] -= amount;
-			currentAllocation[p][r] += amount;
-			return true;
-		}
-
-		public void release(int p, int r, int amount) {
-			resources[r] += amount;
-			currentAllocation[p][r] -= amount;
-		}
-
-		public boolean isDeadlocked() {
-			int cantFinishCount = 0;
-			boolean isDetected = false;
-			for (int i = 0; i < processCount; i++) {
-				isDetected = false;
-				for (int j = 0; !isDetected && j < resourceCount; j++) {
-					if (maxRequests[i][j] > resources[j]) isDetected = true;
-				}
-				if (isDetected) cantFinishCount++;
+	/**
+	 * Generate a reference string
+	 * @param sizeOfVM size of virtual memory as int
+	 * @param length the minimum length of reference string
+	 * @param sizeOfLocus the size of locus
+	 * @param rateOfMotion how many pages in one locus
+	 * @param prob the probability of transition
+	 * @return the reference string as an ArrayList of Integers
+	 */
+	public static ArrayList<Integer> createRS(int sizeOfVM, int length, int sizeOfLocus, int rateOfMotion, double prob) {
+		ArrayList<Integer> result = new ArrayList<Integer>();
+		int start = 0;
+		int n;
+		while (result.size() < length) {
+			for (int i = 0; i < rateOfMotion; i++) {
+				n = (int)(Math.random() * sizeOfLocus + start);
+				result.add(n);
 			}
-			return cantFinishCount == processCount;
+			if (Math.random() < prob) start = (int) Math.random() * sizeOfVM;
+			else start++;
 		}
-
-		public String toString() {
-			String result = "Claim Matrix: \n";
-			int i, j;
-			for (i = 0; i < processCount; i++) {
-				for (j = 0; j < resourceCount; j++) {
-					result += "\t" + maxRequests[i][j];
-				}
-				result += "\n";
-			}
-			result += "\nAllocationMatrix: \n";
-			for (i = 0; i < processCount; i++) {
-				for (j = 0; j < resourceCount; j++) {
-					result += "\t" + currentAllocation[i][j];
-				}
-				result += "\n";
-			}
-			result += "\nAvailable Resources:\n";
-			for (i = 0; i < resourceCount; i++) result += "\t" + resources[i];
-			return result;
-		}
+		return result;
 	}
 
+	// check if the page resides in physical memory
+	private static int isInArray(int[] frames, int page) {
+		for (int i = 0; i < frames.length; i++) {
+			if (frames[i] == page) return i;
+		}
+		return -1;
+	}
+
+	/**
+	 * Simulate FIFO replacement algorithm
+	 * @param rs Reference string as ArrayList of Integer
+	 * @param frameCount Size of physical memory. Initially, pages
+	 * 0, 1, ..., frameCount-1 are loaded into physical memory
+	 * @return number of page faults if using FIFO Replacement algorithm
+	 */
+	public static int FIFOReplacement(ArrayList<Integer> rs, int frameCount) {
+		int [] frames = new int[frameCount];
+		int i, first = 0, count = 0;
+		for (i = 0; i < frameCount; i++) frames[i] = i;
+		for (i = 0; i < rs.size(); i++) {
+			if (isInArray(frames, rs.get(i)) == -1) {
+				frames[first] = rs.get(i);
+				count++;
+				first = (first+1) % frames.length;
+			}
+		}
+		return count;
+	}
+
+	/**
+	 * Simulate LRU replacement algorithm
+	 * @param rs Reference string as ArrayList of Integer
+	 * @param frameCount Size of physical memory. Initially, pages
+	 * 0, 1, ..., frameCount-1 are loaded into physical memory
+	 * @return number of page faults if using LRU Replacement algorithm
+	 */
+	public static int LRUReplacement(ArrayList<Integer> rs, int frameCount) {
+		int [] frames = new int[frameCount];
+		int i, j, count = 0;
+		for (i = 0; i < frameCount; i++) frames[i] = i;
+		for (i = 0; i < rs.size(); i++) {
+			int index = isInArray(frames, rs.get(i));
+			int least;
+			if (index == -1) {
+				least = rs.get(i);
+				count++;
+				index = 0;
+			}
+			else least = frames[index];
+			for (j = index; j < frames.length - 1; j++) {
+				frames[j] = frames[j+1];
+			}
+			frames[j] = least;
+		}
+		return count;
+	}
 	public static void main(String[] args) {
-		Scanner input = new Scanner(System.in);
+		/*
+		// Test integrity of functions
+		int rss[] = {2, 0, 3, 1, 4, 1, 0, 1, 2, 3};
+		ArrayList<Integer> rs = new ArrayList<Integer>();
+		for (int i = 0; i < rss.length; i++) rs.add(rss[i]);
+		*/
 
-		ClaimGraph cg;
-		{
-			System.out.println("Enter number of processes: ");
-			int p = input.nextInt();
-			System.out.println("Enter number of resources: ");
-			int r = input.nextInt();
-			int[] resources = new int[r];
-			System.out.println("Enter number of each resource, searated by whitespace: ");
-			int i, j;
-			for (i = 0; i < r; i++) resources[i] = input.nextInt();
-			System.out.println("Enter claim matrix: ");
-			int[][] maxRequests = new int[p][r];
-			for (i = 0; i < p; i++) {
-				System.out.println("Enter maximum requests of process " + i + " for each resource separated by white space: ");
-				for (j = 0; j < r; j++) maxRequests[i][j] = input.nextInt();
-			}
-
-			cg = new ClaimGraph(p, resources, new int[p][r], maxRequests);
-		}
-
-		System.out.println("System initial state is: \n" + cg);
-		while (!cg.isDeadlocked()) {
-			System.out.println("Enter one of the accepted commands:");
-			System.out.println("1.) request(process, resource, amount)");
-			System.out.println("2.) release(process, resource, amount)");
-			String command[] = input.nextLine().split("\\(|,|\\)");
-			if (command.length == 4) {
-				int p = Integer.parseInt(command[1].trim());
-				int r = Integer.parseInt(command[2].trim());
-				int amount = Integer.parseInt(command[3].trim());
-				if (command[0].trim().equals("request")) {
-					if (!cg.request(p, r, amount)) {
-						System.out.println("The request is rejected.");
-					}
-					else System.out.println("The request is granted.");
-				}
-				else if (command[0].trim().equals("release")) {
-					cg.release(p, r, amount);
-				}
-				else System.out.println("Wrong command format.");
-			}
-			else System.out.println("Wrong command format.");
-			System.out.println("System current state is: \n" + cg);
-		}
-		System.out.println("The system is deadlocked.");
+		// Test performance of functions
+		ArrayList<Integer> rs = createRS(4096, 10000, 10, 100, 0.1);
+		System.out.println("The page fault using FIFO replacement algorithm:");
+		System.out.println("\t" + FIFOReplacement(rs, 10) + " times");
+		System.out.println("The page fault using LRU replacement algorithm:");
+		System.out.println("\t" + LRUReplacement(rs, 10) + " times");
 	}
 }
